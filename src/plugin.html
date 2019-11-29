@@ -1,0 +1,639 @@
+<style type="text/css">
+
+    .header {
+        display: flex;
+        align-items: center;
+    }
+
+    .header img {
+        margin-right: 16px;
+    }
+
+    .header h2 {
+        margin: 0;
+        padding: 0;
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    .wrap {
+        margin-top: 20px;
+        background-color: #FFF;
+        padding: 20px;
+        border-radius: 5px;
+        -moz-border-radius: 5px;
+        -webkit-border-radius: 5px;
+    }
+
+    .badge-warning {
+        color: #212529;
+        background-color: #ffc107;
+    }
+
+    .badge {
+        display: inline-block;
+        padding: .25em .4em;
+        font-size: 75%;
+        font-weight: 700;
+        line-height: 1;
+        text-align: center;
+        white-space: nowrap;
+        vertical-align: baseline;
+        border-radius: .25rem;
+        transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+    }
+    .option {
+        margin-bottom: 5px;
+    }
+
+    #dataTable_wrapper .col-sm-12 {
+        overflow: auto;
+    }
+</style>
+<div class="container">
+    <div class="wrap">
+        <div id="installation">
+            <div class="header">
+                <div class="logo">
+                    <img src="https://go.modlr.co/images/logo.png?v=v1.61" />
+                </div>
+                <h2>Example Plugin</h2>
+            </div>
+
+            <div id="install" style="display: none;">
+                <div class="alert alert-info">
+                    Looks like this plugin isn't installed! Please select a table below to begin the initial setup!
+                </div>
+                <hr />
+                <form class="form" action="" method="POST">
+                    <div class="form-group">
+                        <label>Select Table</label>
+                        <select class="form-control" id="tableList" onchange="selectTable(this);">
+                            <option value selected disabled>-- Select --</option>
+                        </select>
+                    </div>
+
+                    <div id="tableInfo" style="display: none;">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Field Name</th>
+                                    <th class="text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableInfoTable">
+
+                            </tbody>
+                        </table>
+
+                        <div class="sort">
+
+                        </div>
+
+                        <hr />
+                        <button class="btn btn-success" id="saveTable">Complete Installation</button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="plugin" style="display: none;">
+                <div id="drawTable"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript">
+    var serversidePage = "Server";
+    var cache = null;
+    var primaryKey = null;
+    
+    $(document).ready(function() {
+        serverside(serversidePage, {action: "getData"}, initialCallback);
+    });
+
+    function installCallback(response) {
+       var tables = response.tables;
+        if(tables.length == 0) {
+            console.log("No tables found.");
+            return;
+        }
+
+        drawTableOptions(tables);
+    }
+
+    function drawTableOptions(tables) {
+        var select = document.getElementById("tableList");
+        var option = '';
+
+        for(var i = 0, length = tables.length; i < length; i++) {
+            var table = tables[i];
+            option = document.createElement("option");
+            option.value = table.name;
+            option.text = table.name + ((table.exists) ? ' (Exists)' : '');
+
+            select.add(option);
+        }
+
+        $("#install").show();
+    }
+
+    function selectTable(event) {
+        var table = (event.value || event.options[event.selectedIndex].value);
+        if(table == '' || table == undefined || table == null) {
+            console.log('Invalid table selected.');
+            return;
+        }
+
+        serverside(serversidePage, {action: "getTable", table_name: table}, function(response) {
+            fields = response.tableFields;
+            if(fields == null || fields.length == 0) {
+                console.log('Table returned empty');
+                return;
+            }
+
+
+            script = new GenerateScript("Internal Datastore", response.table_name);
+
+            var tableBody = document.getElementById("tableInfoTable");
+            var html = '';
+            // Draw Fields
+            for(var i = 0, length = fields.length; i < length; i++) {
+                var field = fields[i];
+
+                // We need to add pk to script
+                if(field.primaryKey) {
+                    script.primaryKey = field.name;
+                }
+
+                html += `<tr>
+                <td>`+(field.primaryKey ? '<span class="badge badge-warning">Primary Key</span> ' : '') + field.name+`</td>
+                <td class="text-right"><button type="button" class="btn btn-primary btn-sm" onclick="editField(this,'`+field.name+`');">Edit</button></td>
+                </tr>`;
+            }
+            tableBody.innerHTML = html;
+
+            // Show Table
+            var table = document.getElementById("tableInfo");
+            table.style.display = "block";
+        });
+    }
+
+
+    function initialCallback(response) {
+        if(!response.installed) {
+            serverside(serversidePage, {action: "getTables"}, installCallback);
+            return;
+        }
+
+        cache = response.data;
+        primaryKey = cache.primaryKey;
+        drawTable();
+        $("#plugin").show();
+    }
+
+    function drawTable() {
+        var fields = cache.displayFields;
+        var data = cache.response;
+
+        var html = `
+            <table class="table table-striped" id="dataTable" style="width: 100%;">
+                <thead>
+                    <tr>`;
+
+        for(var i = 0, length = fields.length; i < length; i++) {
+            var field = fields[i];
+            html += `<th>`+field.name+`</th>`;
+        }
+
+        html += `   </tr>
+                </thead>
+                <tbody>
+                `+drawData(fields, data)+`
+                </tbody>
+            </table>
+        `;
+
+        document.getElementById("drawTable").innerHTML = html;
+        var dt = $('#dataTable').DataTable({
+            "aaSorting": [],
+            "responsive": true
+        });
+    }
+
+    function drawData(fields, data) {
+        
+        var html = ``;
+
+        for(var j = 0, dLength = data.length; j < dLength; j++) {
+            var row = data[j];
+            html += '<tr>';
+            for(var i = 0, length = fields.length; i < length; i++) {
+                var field = fields[i];
+                switch(field.type) {
+                    case 'text':
+                        html += fieldText(field, row);
+                        break;
+                    case 'list':
+                        html += fieldList(field, row);
+                        break;
+                    case 'number_currency':
+                        html += fieldCurrency(field, row);
+                        break;
+                    case 'number_locale':
+                        html += fieldLocale(field, row);
+                        break;
+                    case 'number_percentage':
+                        html += fieldPercentage(field, row);
+                        break;
+                    case 'checkbox':
+                        html += fieldCheckbox(field, row);
+                        break;                 
+                    default: 
+                        html += fieldText(field, row);
+                        break;
+                }
+                
+            }
+
+            html += '</tr>';
+        }
+
+        return html;
+    }
+
+    function fieldText(field, row) {
+        var value = row[field.name];
+        var html = '<td style="min-width: 200px;">';
+        if(field.editable) {
+            html += '<input type="text" class="form-control saveOnBlur" data-pk="'+row[primaryKey]+'" data-field="'+field.name+'" value="'+value+'" />';
+        } else {
+            html += value;
+        }
+        html += '</td>';
+        return html;
+    }
+
+    function fieldList(field, row) {
+        var value = row[field.name];
+        var html = '<td style="min-width: 200px;">';
+        if(field.editable) {
+            console.log(field);
+        
+            html += '<select class="form-control saveOnChange" data-pk="'+row[primaryKey]+'" data-field="'+field.name+'">';
+            html += '<option value="" selected disabled></option>';
+            for(var i = 0, length = field.options.length; i < length; i++) {
+                var option = field.options[i];
+                var selected = '';
+                if(option == value) {
+                    selected = 'selected="selected"';
+                }
+                html += '<option value="'+option+'" '+selected+'>'+option+'</option>';
+            }
+            html += '</select>';
+        } else {
+            html += value;
+        }
+        html += '</td>';
+        return html;
+    }
+
+    function fieldCurrency(field, row) {
+        var value = row[field.name];
+        value = generalNumberFormat(parseFloat(value),"$#,##0.00");
+        var html = '<td style="min-width: 200px;">';
+        if(field.editable) {
+            html += '<input type="text" class="form-control form-currency saveOnBlur" data-pk="'+row[primaryKey]+'" data-field="'+field.name+'" value="'+value+'" />';
+        } else {
+            html += value;
+        }
+        html += '</td>';
+        return html;
+    }
+
+    function fieldCurrency(field, row) {
+        var value = row[field.name];
+        value = generalNumberFormat(parseFloat(value),"#,##0.00");
+        var html = '<td style="min-width: 200px;">';
+        if(field.editable) {
+            html += '<input type="text" class="form-control form-currency saveOnBlur" data-pk="'+row[primaryKey]+'" data-field="'+field.name+'" value="'+value+'" />';
+        } else {
+            html += value;
+        }
+        html += '</td>';
+        return html;
+    }
+
+    function fieldPercentage(field, row) {
+        var value = row[field.name];
+        value = generalNumberFormat(parseFloat(value),"0.00%");
+        var html = '<td style="min-width: 200px;">';
+        if(field.editable) {
+            html += '<input type="text" class="form-control form-currency saveOnBlur" data-pk="'+row[primaryKey]+'" data-field="'+field.name+'" value="'+value+'" />';
+        } else {
+            html += value;
+        }
+        html += '</td>';
+        return html;
+    }
+
+    function fieldCheckbox(field, row) {
+        var value = row[field.name];
+        var html = '<td style="min-width: 200px;">';
+        if(field.editable) {
+            html += '<input type="checkbox" class="form-control saveOnChangeCheckbox" data-pk="'+row[primaryKey]+'" data-field="'+field.name+'" '+((value == true || value == "true" || value == 1 || value == "1") ? 'checked="checked"' : '') +' />';
+        } else {
+            html += value;
+        }
+        html += '</td>';
+        return html;
+    }
+
+    $(document).on('blur', '.saveOnBlur', function(e) {
+        e.preventDefault();
+        bLoading = false;
+        var value = $(this).val();
+
+        var pk = $(this).data('pk');
+        var field = $(this).data('field');
+
+        console.log('UPDATE {TABLE} SET '+field+' = {'+value+'} WHERE {PK} = '+pk);
+        serverside(serversidePage, {action: "saveField", field: field, value: value, pk: pk}, function(response) {
+            console.log(response);
+        });
+    });
+    
+    $(document).on('change', '.saveOnChange', function(e) {
+        e.preventDefault();
+        bLoading = false;
+        var value = $(this).val();
+        console.log(value);
+        var pk = $(this).data('pk');
+        var field = $(this).data('field');
+
+        console.log('UPDATE {TABLE} SET '+field+' = {'+value+'} WHERE {PK} = '+pk);
+        serverside(serversidePage, {action: "saveField", field: field, value: value, pk: pk}, function(response) {
+            console.log(response);
+        });
+    });
+
+     $(document).on('change', '.saveOnChangeCheckbox', function(e) {
+        e.preventDefault();
+        bLoading = false;
+        if($(this).is(':checked')) {
+            value = "true";
+        } else {
+            value = "false"
+        }
+
+        console.log(value);
+
+        var pk = $(this).data('pk');
+        var field = $(this).data('field');
+
+        console.log('UPDATE {TABLE} SET '+field+' = {'+value+'} WHERE {PK} = '+pk);
+        serverside(serversidePage, {action: "saveField", field: field, value: value, pk: pk}, function(response) {
+            console.log(response);
+        });
+    });
+
+    function editField(event, field_name) {
+        var field = fieldByName(field_name);
+        if(field == null) {
+            console.log('Could not find field by that field name.');
+            return;
+        }
+
+        activeField = field;
+        
+        var html = drawFieldModal(field);
+        $("#editFieldModal .modal-body").html(html);
+        $("#editFieldModal").modal('show');
+        return false;
+    }
+
+    function drawFieldModal(field) {
+        
+        // Checkc we have some fields 
+        var options = ((field.options == undefined) ? [] : field.options);
+        var isEditable = ((field.editable == undefined) ? false : field.editable);
+        var isHidden = ((field.hidden == undefined) ? false : field.hidden);
+
+        var html = `
+            <form class="form" action="" method="POST" id="editFieldForm">
+
+                <div class="form-group">
+                    <label>Field Name</label>
+                    <strong class="form-static-control">`+field.name+`</strong>
+                </div>
+                `;
+            if(!field.primaryKey) {
+
+            html += `
+                <div class="form-group">
+                    <label>Field Type</label>
+                    <select class="form-control" name="field_type" id="field_type" onchange="fieldTypeChange(this);">
+                        <option value="text" `+((field.type == 'text') ? 'selected="selected"' : '')+`>Text</option>
+                        <option value="list" `+((field.type == 'list') ? 'selected="selected"' : '')+`>Text List</option>
+                        <option value="number_currency" `+((field.type == 'number_currency') ? 'selected="selected"' : '')+`>Number $0,000</option>
+                        <option value="number_locale" `+((field.type == 'number_locale') ? 'selected="selected"' : '')+`>Number 0,000</option>
+                        <option value="number_percentage" `+((field.type == 'number_percentage') ? 'selected="selected"' : '')+`>Number 0.00%</option>
+                        <option value="checkbox" `+((field.type == 'checkbox') ? 'selected="selected"' : '')+`>Checkbox</option>
+                    </select>
+                </div>`;
+            }
+                
+            html += `
+                <div id="field_list_block" `+((field.type == 'list') ? '' : 'style="display: none;"')+`>
+                    <div class="clearfix">
+                        <h5 class="pull-left">Options</h5>
+                        <button class="btn btn-primary btn-xs pull-right" id="addOption">Add Option</option>
+                    </div>
+
+
+                    <div id="options">
+                `;
+                for(var i = 0, length = options.length; i < length; i++) {
+                    var option = options[i];
+                    html += addOptionHtml(option);
+                }
+                html += `
+                    </div>
+                    <hr />
+                    
+                </div>
+
+                <div class="checkbox">
+                    <label>
+                        <input type="checkbox" name="field_hidden" id="field_hidden" `+((isHidden) ? 'checked="checked"' : '')+`/> Is Hidden
+                    </label>
+                </div>
+
+                <div class="checkbox">
+                    <label>
+                        <input type="checkbox" name="field_editable" id="field_editable" `+((isEditable) ? 'checked="checked"' : '')+`/> Is Editable
+                    </label>
+                </div>
+                <hr />
+                <button type="submit" class="btn btn-success">Save</button>
+            </form>
+        `;
+
+        return html;
+    }
+
+    /**
+     * Field by Field Name
+     */
+    function fieldByName(field_name) {
+        if(fields == null) {
+            return null;
+        }
+        for(var i = 0, length = fields.length; i < length; i++) {
+            var field = fields[i];
+            if(field.name == field_name) {
+                field.index = i;
+                return field;
+            }
+        }
+
+        return null;
+    }
+
+
+    function fieldTypeChange(event) {
+        var value = (event.value || event.options[event.selectedIndex].value);
+
+        if(value == 'list') {
+            document.getElementById("field_list_block").style.display = 'block';
+        } else {
+            document.getElementById("field_list_block").style.display = 'none';
+        }
+    }
+
+    $(document).on('submit', '#editFieldForm', function(e) {
+        e.preventDefault();
+        var field = activeField;
+        var field_type = $(this).find('#field_type').val();
+        var isHidden = $(this).find('#field_hidden').is(':checked');
+        var isEditable = $(this).find('#field_editable').is(':checked');
+        
+        var options = [];
+        if(field_type == 'list') {
+            var $options = $(this).find('.option .form-control');
+            for(var i = 0, length = $options.length; i < length; i++) {
+                var option = $options[i];
+                var value = $(option).val();
+                value = value.trim();
+                if(value != '' || value != null) {
+                    options.push(value);
+                }
+            }
+
+            if(options.length == 0) {
+                console.log('Please provide atleast one option.');
+                return;
+            }
+        }
+
+        fields[field.index].type = field_type;
+        fields[field.index].options = options;
+        fields[field.index].editable = isEditable;
+        fields[field.index].hidden = isHidden;
+
+        $("#editFieldModal").modal('hide');
+    });
+
+    $(document).on('click', '#saveTable', function(e) {
+        e.preventDefault();
+        script.setFields(fields);
+        var json = script.build();
+        serverside(serversidePage, {action: "saveTable", table_name: script.table, table_data: json}, function(response) {
+            $("#install").hide();
+            serverside(serversidePage, {action: "getData"}, initialCallback);
+        });
+    });
+
+    $(document).on('click', '#addOption', function(e) {
+        e.preventDefault();
+
+        var html = addOptionHtml();
+
+        $("#options").append(html);
+
+    });
+
+    $(document).on('click', '#completeInstallation', function(e) {
+        e.preventDefault();
+
+        serverside(serversidePage, {action: "completeInstallation"}, function(response) {
+            if(response.reload != undefined) {
+                console.log('Should reload and then go to another page.');
+                return;
+            }
+        });
+    }); 
+
+    function addOptionHtml(value) {
+        if(value == undefined) {
+            value = '';
+        }
+        var html = `
+            <div class="option input-group">
+                <input type="text" class="form-control" value="`+value+`">
+                <span class="input-group-btn">
+                    <button class="btn btn-danger" type="button" id="deleteOption">×</button>
+                </span>
+            </div>
+        `;
+
+        return html;
+    }
+
+    $(document).on('click', '#deleteOption', function(e) {
+        e.preventDefault();
+
+        $(this).closest('.option').remove();
+    });
+
+    function GenerateScript(datasource, table_name) {
+        var self = this;
+
+        self.datasource = datasource;
+        self.table = table_name;
+        self.displayFields = [];
+        self.editFields = [];
+        self.fields = [];
+        self.sort = [];
+        self.primaryKey = null;
+
+        self.setFields = function(fields) {
+            self.fields = fields;
+        };
+        
+        self.build = function() {
+            var data = {};
+            data.datasource = self.datasource;
+            data.primaryKey = self.primaryKey;
+            data.table = self.table;
+            data.fields = self.fields;
+            data.sort = self.sort;
+
+            return JSON.stringify(data);
+        };
+    }
+</script>
+
+
+<div class="modal fade" id="editFieldModal" tabindex="-1" role="dialog" aria-labelledby="editFieldModalLabel">
+    <div class="modal-dialog" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">×</span></button>
+                <h4 class="modal-title" id="editFieldModalLabel">Edit Field</h4>
+            </div>
+            <div class="modal-body">
+            </div>
+        </div>
+    </div>
+</div>
