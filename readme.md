@@ -1,4 +1,4 @@
-# MODLR Database Editor Plugin Repository
+# MODLR Table Editor Plugin
 Open source drag and drop plugin used to extend MODLRs capabilities.
 
 ## Installation
@@ -19,6 +19,6 @@ Open source drag and drop plugin used to extend MODLRs capabilities.
 If you believe you've found a security vunerability please do not post it on GitHub, please email us at: security@modlr.co
 - [Github Issues](https://github.com/modlr-the-corporate-performance-cloud/MODLR-Plugin-Database-Editor/issues)
 ## Contributors
-- Brad Veryard - [Github](http://github.com/veryard), [Twitter](http://twitter.com/bradveryard)
+- Brad Veryard - [Github](http://github.com/veryard)
   
 ## Want to know more about MODLR plugins?
