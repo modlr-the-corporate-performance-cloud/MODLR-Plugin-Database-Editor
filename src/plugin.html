@@ -190,6 +190,9 @@
         primaryKey = cache.primaryKey;
         drawTable();
         $("#plugin").show();
+
+
+        DataTableTest();
     }
 
     function drawTable() {
@@ -209,16 +212,12 @@
         html += `   </tr>
                 </thead>
                 <tbody>
-                `+drawData(fields, data)+`
+               
                 </tbody>
             </table>
         `;
 
         document.getElementById("drawTable").innerHTML = html;
-        var dt = $('#dataTable').DataTable({
-            "aaSorting": [],
-            "responsive": true
-        });
     }
 
     function drawData(fields, data) {
@@ -278,8 +277,6 @@
         var value = row[field.name];
         var html = '<td style="min-width: 200px;">';
         if(field.editable) {
-            console.log(field);
-        
             html += '<select class="form-control saveOnChange" data-pk="'+row[primaryKey]+'" data-field="'+field.name+'">';
             html += '<option value="" selected disabled></option>';
             for(var i = 0, length = field.options.length; i < length; i++) {
@@ -357,9 +354,8 @@
         var pk = $(this).data('pk');
         var field = $(this).data('field');
 
-        console.log('UPDATE {TABLE} SET '+field+' = {'+value+'} WHERE {PK} = '+pk);
         serverside(serversidePage, {action: "saveField", field: field, value: value, pk: pk}, function(response) {
-            console.log(response);
+            // @todo: response?
         });
     });
     
@@ -367,13 +363,11 @@
         e.preventDefault();
         bLoading = false;
         var value = $(this).val();
-        console.log(value);
         var pk = $(this).data('pk');
         var field = $(this).data('field');
 
-        console.log('UPDATE {TABLE} SET '+field+' = {'+value+'} WHERE {PK} = '+pk);
         serverside(serversidePage, {action: "saveField", field: field, value: value, pk: pk}, function(response) {
-            console.log(response);
+            
         });
     });
 
@@ -386,14 +380,11 @@
             value = "false"
         }
 
-        console.log(value);
-
         var pk = $(this).data('pk');
         var field = $(this).data('field');
 
-        console.log('UPDATE {TABLE} SET '+field+' = {'+value+'} WHERE {PK} = '+pk);
         serverside(serversidePage, {action: "saveField", field: field, value: value, pk: pk}, function(response) {
-            console.log(response);
+            
         });
     });
 
@@ -621,6 +612,34 @@
 
             return JSON.stringify(data);
         };
+    }
+    var dt = null;
+    $(document).on('click', '.reloadTable', function(e) {
+        e.preventDefault();
+        dt.ajax.reload();
+    });
+
+    function DataTableTest() {
+        drawTable();
+        var fields = cache.displayFields;
+        var columns = [];
+        for(var i = 0, length = fields.length; i < length; i++) {
+            var field = fields[i];
+            var push = {};
+            push.data = field.name;
+            columns.push(push);
+        }
+        var dt = $('#dataTable').DataTable( {
+            "processing": true,
+            "serverSide": true,
+            "ajax": function (data, callback, settings) {
+                serverside(serversidePage, {"action": "dataTable", dtData: {data: data, settings: settings}}, function(response) {
+                    
+                    callback(response.dataTable);
+                });
+            },
+            //columns: columns
+        });
     }
 </script>
 

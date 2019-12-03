@@ -37,13 +37,22 @@ function request(post) {
     } else if(action == "getTables") {
         sql = "SHOW TABLES;";
         result.tables = sortTables(JSON.parse(datasource.select(ds, sql)));
+    } else if(action == "dataTable") {
+        var postData = post.dtData;
+        var data = {};
+        if(result.installed) {
+            data = getJson();
+            var dt = new DataTable(postData.data, [], data.fieldNames, data.table, data.datasource);
+            result.dataTable = dt;
+        } 
+        
     } else if(action == "getData") {
         var sort = post.sort;
         var data = {};
         if(result.installed) {
             data = getJson();
             var sql = "SELECT "+data.fieldNames.join(',')+" FROM " + data.table;
-
+            
             var response = JSON.parse(datasource.select(data.datasource, sql));
             data.response = response;
         } 
@@ -72,6 +81,128 @@ function request(post) {
 
     return JSON.stringify(result);
 }
+
+/**
+ * Parse Data for DataTable
+ * @param data  Data from DT client
+ * @param settings  Settings from DT client
+ * @param field_names   Database Field Names
+ * @param table_name    Database Table Name
+ * @param ds    Datastore
+ */
+function DataTable(data, settings, field_names, table_name, ds) {
+    var self = this;
+    self.data = data;
+    self.settings = settings;
+    self.field_names = field_names;
+    self.table_name = table_name;
+    self.ds = ds;
+    // Data from client
+    self.draw = data.draw;
+    self.row = data.start;
+    self.rowPerPage = data.length;
+    self.columnIndex = data.order[0].column;
+    self.columnName = self.field_names[self.columnIndex];
+    self.columnSortOrder = data.order[0].dir;
+    self.searchValue = data.search.value;
+
+    self.order = "";
+    if(self.columnName != undefined && self.columnSortOrder != undefined) {
+        self.order = " ORDER BY "+self.columnName+" "+self.columnSortOrder+" ";
+    }
+
+    self.addColumns = function() {
+        var columns = [];
+        for(var i = 0, length = self.field_names.length; i < length; i++) {
+            var field = self.field_names[i];
+            var push = {};
+            push.data = field;
+            columns.push(push);
+        }
+
+        console.log(JSON.stringify(columns));
+
+        return columns;
+    };
+    // Temp Data
+    self.searchQuery = " ";
+    self.totalRecords = 0;
+    self.totalRecordsFilter = 0;
+
+    self.search = function() {
+        if(self.searchValue != '') {
+            self.searchQuery = " AND (";
+            for(var i = 0, length = self.field_names.length; i < length; i++) {
+                var field = self.field_names[i];
+                self.searchQuery += field + " LIKE '%"+self.searchValue+"%' ";
+
+                if(i != length-1) {
+                    self.searchQuery += "OR ";
+                }
+            }
+            self.searchQuery += ") ";
+        }
+    }; 
+
+    /**
+     * Get total rows without filtering
+     */
+    self.getTotalRows = function() {
+        var sql = "SELECT COUNT(*) as total FROM "+self.table_name;
+        var response = JSON.parse(datasource.select(self.ds, sql));
+        var total = parseInt(response[0].total);
+
+        return total;
+    };
+
+    /**
+     * Get total rows with filtering
+     */
+    self.getTotalRowsFilter = function() {
+        var sql = "SELECT COUNT(*) as total FROM "+self.table_name + " WHERE 1 "+self.searchQuery + " "+self.order + " LIMIT "+self.row+","+self.rowPerPage;
+        var response = JSON.parse(datasource.select(self.ds, sql));
+        var total = parseInt(response[0].total);
+
+        return total;
+    };
+
+    /**
+     * Get Records 
+     */
+    self.getRecords = function() {
+        var field_names = self.field_names.join(",");
+        
+        var sql = "SELECT "+field_names+" FROM "+self.table_name+" WHERE 1 "+self.searchQuery+" "+self.order+" LIMIT "+self.row+","+self.rowPerPage+";";
+        console.log(sql);
+        var records = JSON.parse(datasource.select(self.ds, sql));
+         var result = Object.keys(records).map(function(key) {
+            return Object.keys(records[key]).map(i => records[key][i]);
+        });
+        return result;
+    };
+
+    self.getResponse = function() {
+        var payload = {};
+        
+        payload["draw"] = parseInt(self.draw);
+        payload["iTotalRecords"] = self.totalRecords;
+        payload["iTotalDisplayRecords"] = self.totalRecordsFilter;
+        payload["aaData"] = self.records;
+
+        return payload;
+    };
+
+    // Sort Search 
+    self.search();
+    // Update Total Rows
+    self.totalRecords = self.getTotalRows();
+    // Update Total Filter Rows
+    self.totalRecordsFilter = self.getTotalRowsFilter();
+
+    // Get records
+    self.records = self.getRecords();
+    return self.getResponse();
+};
 
 function getField(fields, field_name) {
     for(var i = 0, length = fields.length; i < length; i++) {
