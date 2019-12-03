@@ -9,10 +9,11 @@ Open source drag and drop plugin used to extend MODLRs capabilities.
 5. Create a new activity screen and set the content to the custom page you created in step **1**.
 6. Create a new access tag and allow access to the newly created activity screen.
 
+## Screenshots
 
 ## Support
-- [ZenDesk](http://support.modlr.co/)
-- support@modlr.co
+- [Support Ticketing and Bug Tracking](http://support.modlr.co/)
+- Email: support@modlr.co
   
 ## Bugs
 If you believe you've found a security vunerability please do not post it on GitHub, please email us at: security@modlr.co
