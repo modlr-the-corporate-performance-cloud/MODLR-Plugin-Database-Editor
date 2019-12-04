@@ -10,13 +10,18 @@ Open source drag and drop plugin used to extend MODLRs capabilities.
 6. Create a new access tag and allow access to the newly created activity screen.
 
 ## Screenshots
+Installation
+![alt text](./screenshots/installation.png "Installation")
+
+Table Editor
+![alt text](./screenshots/table.png "Installation")
 
 ## Support
 - [Support Ticketing and Bug Tracking](http://support.modlr.co/)
 - Email: support@modlr.co
   
 ## Bugs
-If you believe you've found a security vunerability please do not post it on GitHub, please email us at: security@modlr.co
+If you believe you've found a security vulnerability please do not post it on GitHub, please email us at: security@modlr.co
 - [Github Issues](https://github.com/modlr-the-corporate-performance-cloud/MODLR-Plugin-Database-Editor/issues)
 ## Contributors
 - Brad Veryard - [Github](http://github.com/veryard)
